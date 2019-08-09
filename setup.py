@@ -10,7 +10,7 @@ except IOError:
     readme = ""
 
 setup(
-    name="emily woods",
+    name="a-dheanamh",
     author="emily woods",
     author_email="hello@emilywoods.me",
     url="",
