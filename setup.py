@@ -17,11 +17,15 @@ setup(
     description="",
     long_description=readme,
     version=str(__version__),
-    entry_points={"console_scripts": []},
+    entry_points='''
+         [console_scripts]
+         aw-yay=aw_yay.main:main
+     ''',
     packages=find_packages(),
     install_requires=[
-        "requests==2.22.0",
-        "crate"
+        "click",
+        "requests",
+        "configparser"
     ],
     extras_require={"testing": ["black==19.3b0"]},
     python_requires=">=3.7",

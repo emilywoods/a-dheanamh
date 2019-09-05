@@ -2,3 +2,5 @@
 .venv/
 env.config
 a_dheanamh.egg-info/
+aw_yay/__pycache__/
+aw-yay.config
