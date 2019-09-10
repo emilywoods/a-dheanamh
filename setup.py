@@ -25,9 +25,10 @@ setup(
     install_requires=[
         "click",
         "requests",
-        "configparser"
+        "configparser",
+        "colorama",
     ],
-    extras_require={"testing": ["black==19.3b0"]},
+    extras_require={"test": ["black", "mypy", "isort"]},
     python_requires=">=3.7",
     classifiers=[
         "Programming Language :: Python :: 3.7",

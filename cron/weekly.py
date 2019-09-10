@@ -1,18 +1,17 @@
 import argparse
-import time
 import configparser
 import itertools
 import sys
-
+import time
 from copy import deepcopy
 from io import open
 from json import loads
-from typing import List, Dict
+from typing import Dict, List
+
+import requests
 
 from crate import client
 from crate.client.cursor import Cursor
-
-import requests
 
 
 def parse_args(args) -> configparser.ConfigParser:
