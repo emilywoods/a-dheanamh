@@ -1,82 +1,91 @@
 import argparse
 import configparser
 import itertools
+import logging
 import sys
-import time
-from copy import deepcopy
 from io import open
 from json import loads
+from time import time, ctime
 from typing import Dict, List
 
 import requests
 
 from crate import client
+from crate.client.connection import Connection
 from crate.client.cursor import Cursor
 
 
-def parse_args(args) -> configparser.ConfigParser:
+CREATE_TABLE_STATEMENT: str = """
+        CREATE TABLE IF NOT EXISTS tasks (
+            ts_completed TIMESTAMP,
+            description TEXT,
+            name STRING,
+            ts_due TIMESTAMP,
+            labels ARRAY(string)
+        )"""
+INSERT_INTO_TABLE_STATEMENT: str = """
+        INSERT INTO tasks (ts_completed, description, name, ts_due, labels) 
+        VALUES (?, ?, ?, ?, ?)
+        """
+FILENAME: str = "weekly-report.txt"
+URL: str = "https://api.trello.com/1/lists/{}/{}"
+
+
+def _parse_args(args) -> configparser.ConfigParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", dest="config_file", required=True, type=str)
     args = parser.parse_args(args)
 
     config_file = args.config_file
-    print(f"Reading configuration from {config_file}")
+    logging.debug(f"Reading configuration from {config_file}")
     config = configparser.ConfigParser()
     config.read(args.config_file)
     return config
 
 
-def create_table(cursor: Cursor):
-    import pdb
+def _initialise_db(url: str, username: str, password: str) -> (Connection, Cursor):
+    conn, cursor = _connect_to_db(url, username, password)
+    _create_table(cursor)
+    return conn, cursor
 
-    pdb.set_trace()
 
-    cursor.execute(
-        """CREATE TABLE IF NOT EXISTS tasks (
-        ts_completed TIMESTAMP,
-        description TEXT,
-        name STRING,
-        ts_due TIMESTAMP,
-        labels ARRAY(string))
-        """
+def _connect_to_db(url: str, username: str, password: str) -> (Connection, Cursor):
+    conn = client.connect(
+        url, username=username, password=password, timeout=10, verify_ssl_cert=False
     )
+    cursor: Cursor = conn.cursor()
+    return conn, cursor
 
 
-def get_list_of_cards(board_id, key, token) -> List:
-    url_to_list_cards = (
-        f"https://api.trello.com/1/boards/{board_id}/cards?key={key}&token={token}"
-    )
-    response = requests.get(url=url_to_list_cards)  # add try/catch
-    return loads(response.text)
+def _create_table(cursor: Cursor):
+    cursor.execute(CREATE_TABLE_STATEMENT)
 
 
-def filter_tasks(tasks: List) -> List:
-    """
-    Extract relevant information
-    """
+def _gather_task_insights(list_id: str, query_params: Dict) -> (Dict, Dict):
+    tasks = _get_tasks_in_done_column(list_id, query_params)
+    cleaned_tasks = _extract_useful_info(tasks=tasks)
+    task_distribution = _get_distribution_by_label(cleaned_tasks)
+    return cleaned_tasks, task_distribution
+
+
+def _get_tasks_in_done_column(list_id: str, query_params: Dict) -> List:
+    try:
+        response = requests.get(URL.format(list_id, "cards"), params=query_params)
+        response.raise_for_status()
+        return loads(response.text)
+    except requests.exceptions.RequestException as e:
+        logging.error("Error when fetching and parsing tasks {}:".format(e))
+
+
+def _extract_useful_info(tasks: List) -> List:
     filtered_tasks = []
     for task in tasks:
-        relevant_task_data = extract_data(task)
+        relevant_task_data = _extract_data(task)
         filtered_tasks.append(relevant_task_data)
     return filtered_tasks
 
 
-def extract_data(task: Dict):
-    """
-    Relevant fields from single element in response:
-     {
-        'dateLastActivity': '2019-08-09T19:59:30.996Z',
-        'desc': '',
-        'name': 'I have one task there',
-        'due': None,
-        'labels': [
-            {
-                'name': 'sys-admin',
-            }
-        ],
-     }
-
-    """
+def _extract_data(task: Dict) -> Dict:
     return {
         "ts_completed": task["dateLastActivity"],
         "description": task["desc"],
@@ -86,13 +95,13 @@ def extract_data(task: Dict):
     }
 
 
-def get_task_distribution(filtered_tasks: List) -> Dict:
+def _get_distribution_by_label(filtered_tasks: List) -> Dict:
     all_labels = get_labels(filtered_tasks)
     unique_labels = set(all_labels)
     distribution = {}
     for label in unique_labels:
         count = all_labels.count(label)
-        print(f"Completed {count} tasks for: {label}")
+        logging.debug(f"Completed {count} tasks for: {label}")
         distribution[label] = count
     return distribution
 
@@ -102,92 +111,61 @@ def get_labels(tasks: List) -> List:
     return list(itertools.chain(*label_list_of_lists))
 
 
-def create_weekly_summary_report(num_tasks_completed, distribution, tasks):
-    f = open("weekly-report.txt", "a+")
+def create_weekly_summary_report(distribution: Dict, tasks: List) -> None:
+    f = open(FILENAME, "a+")
 
     intro = f"""
-Date: {time.time()}
+Date: {ctime(time())}
 
-This week you completed {num_tasks_completed} tasks.
+This week you completed {len(tasks)} tasks.
 
 The distribution of these tasks is broken down as {distribution} 
     """
-    report = intro + "\n"
+    contents = intro + "\n"
     count = 1
     for task in tasks:
-        report += f"{count}. {task}\n"
+        contents += f"{count}. {task}\n"
         count += 1
-    f.write(report)
+    f.write(contents)
     f.close()
 
 
-def insert_to_db(cursor: Cursor, input: List):
+def _insert_to_db(cursor: Cursor, input: List) -> None:
     raw = [tuple(record.values()) for record in input]
-    import pdb
-
-    pdb.set_trace()
-    cursor.executemany(
-        "INSERT INTO tasks (ts_completed, description, name, ts_due, labels) "
-        "VALUES (?, ?, ?, ?, ?) ",
-        raw,  # list of tuples
-    )
+    cursor.executemany(INSERT_INTO_TABLE_STATEMENT, raw)
 
 
-def archive_completed_tasks():
-    requests.post(
-        url=f"https://api.trello.com/1/lists/{list_id}/archiveAllCards?key={key}&token={token}"
-    )
+def _archive_completed_tasks(list_id: str, query_params: Dict) -> None:
+    try:
+        response = requests.post(
+            URL.format(list_id, "archiveAllCards"), params=query_params
+        )
+        response.raise_for_status()
+        return loads(response.text)
+    except requests.exceptions.RequestException as e:
+        logging.error("Error when archiving tasks {}:".format(e))
 
 
 def main(args) -> None:
-    config: configparser.ConfigParser = parse_args(args)
-    board_id = config.get("default", "board_id")
-    key = config.get("default", "key")
-    token = config.get("default", "token")
+    config: configparser.ConfigParser = _parse_args(args)
     list_id = config.get("default", "list_id")
-
-    conn = client.connect(
-        "http://localhost:4200",
-        username="crate",
-        password="",
-        timeout=10,
-        verify_ssl_cert=False,
-    )
-
-    cursor: Cursor = conn.cursor()
-
-    create_table(cursor)
-    list_of_cards = get_list_of_cards(board_id, key, token)
-
-    completed_tasks = list(
-        filter(lambda task: task["idList"] == list_id, list_of_cards)
-    )
-    num_tasks_completed = len(completed_tasks)
-    print(f"This week you completed {num_tasks_completed} tasks\n")
-
-    tasks = deepcopy(completed_tasks)
-    filtered_tasks = filter_tasks(tasks=tasks)
-
-    weekly_summary = {
-        "total_completed": num_tasks_completed,
-        "task_list": filtered_tasks,
+    username = config.get("database", "username")
+    password = config.get("database", "password")
+    database_connection = config.get("database", "connection")
+    query_params = {
+        "key": config.get("default", "key"),
+        "token": config.get("default", "token"),
     }
 
-    distribution = get_task_distribution(deepcopy(filtered_tasks))
+    conn, cursor = _initialise_db(database_connection, username, password)
 
-    create_weekly_summary_report(num_tasks_completed, distribution, filtered_tasks)
+    completed_tasks, task_distribution = _gather_task_insights(list_id, query_params)
 
-    weekly_summary["distribution"] = distribution
-    print(weekly_summary)
-
-    insert_to_db(cursor=cursor, input=filtered_tasks)
-
-    archive_completed_tasks()
-
+    create_weekly_summary_report(task_distribution, completed_tasks)
+    _insert_to_db(cursor=cursor, input=completed_tasks)
+    _archive_completed_tasks(list_id, query_params)
     conn.close()
 
-
-archive_completed_tasks()
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
