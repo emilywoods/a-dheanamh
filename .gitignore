@@ -1,7 +1,7 @@
 .idea/
-.venv/
-env.config
+**.venv/
+**.config
 a_dheanamh.egg-info/
 aw_yay/__pycache__/
-aw-yay.config
 .mypy_cache/
+**/weekly-report.txt
