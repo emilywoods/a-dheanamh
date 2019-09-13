@@ -42,14 +42,15 @@ def _get_list_items(ctx, list_id=None) -> List:
 
 
 @click.group()
-@click.option("--config-file", "-c", type=click.Path(), default="aw-yay.config")
+@click.option("--api-key", "-a", help="your API key for the Trello API")
+@click.option("--config-file", "-c", type=click.Path(), default="~/.aw-yay.config")
 @click.pass_context
 def main(ctx, api_key: str, config_file: str):
-    filename = os.path.expanduser(config_file)
+    filepath = os.path.expanduser(config_file)
 
-    if not api_key and os.path.exists(filename):
+    if not api_key and os.path.exists(filepath):
         config = ConfigParser()
-        config.read(config_file)
+        config.read(filepath)
         ctx.obj = {
             "api_key": config.get("trello", "key"),
             "api_token": config.get("trello", "token"),
