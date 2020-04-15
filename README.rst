@@ -14,8 +14,8 @@ It is comprised of two parts:
 1. `A weekly cron script`_ which clears completed tasks and generates a summary
    of things completed and stores them in a database for further analysis.
 
-2. A CLI tool called `aw-yay`_ to interact with Trello boards on the command
-   line.
+2. A CLI tool called `aw-yay`_ (so-called because **dhéanamh** is pronounced
+   'yay-nav') to interact with Trello boards on the command line.
 
 
 .. _A weekly cron script: cron/README.rst
