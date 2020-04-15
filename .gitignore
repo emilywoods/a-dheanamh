@@ -5,3 +5,4 @@ a_dheanamh.egg-info/
 aw_yay/__pycache__/
 .mypy_cache/
 **/weekly-report.txt
+.vscode/
