@@ -39,3 +39,20 @@ Or alternatively::
    $ make run
 
 .. _here: ../example-cron.conf
+
+Crontab
+=======
+
+This file is intended to be run as a weekly cron job. To set this up,
+install the dependencies::
+
+   $ pip3 install -r requirements.txt
+
+Then, using ``crontab``, create an entry for this script::
+
+   $ crontab -e
+
+And add the entry::
+
+   $ 0 0 * * 0 python3 <absolute-path>/weekly.py -c <absolute-path>/example-cron.conf >> ~/cron.log 2>&1
+
