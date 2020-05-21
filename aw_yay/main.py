@@ -6,7 +6,7 @@ from typing import List
 import click
 import requests
 
-TODO: str = "todo"
+LATER: str = "later"
 BOOKS_LEARNING: str = "books.learning"
 BOOKS_FUN: str = "books.fun"
 CODE: str = "code"
@@ -56,7 +56,7 @@ def main(ctx, api_key: str, config_file: str):
             "api_token": config.get("trello", "token"),
             TODAY: config.get(BOARD_NAME_WEEKLY, TODAY),
             DONE: config.get(BOARD_NAME_WEEKLY, DONE),
-            TODO: config.get(BOARD_NAME_WEEKLY, TODO),
+            LATER: config.get(BOARD_NAME_WEEKLY, LATER),
             BOOKS_LEARNING: config.get(BOARD_NAME_BOOKS, "learning"),
             BOOKS_FUN: config.get(BOARD_NAME_BOOKS, "fun"),
             CODE: config.get(BOARD_NAME_PROJECTS, CODE),
@@ -72,17 +72,17 @@ def main(ctx, api_key: str, config_file: str):
 @click.command()
 @click.pass_context
 def today(ctx):
-    click.echo(click.style("today!\n", fg="blue"))
+    click.echo(click.style("today.. or this week!\n", fg="blue"))
     everything = _get_list_items(list_id=ctx.obj[TODAY])
     _print_each_to_console(everything)
 
 
 @click.command()
 @click.pass_context
-def week(ctx):
-    click.echo(click.style("To do this week\n", fg="blue"))
+def later(ctx):
+    click.echo(click.style("Upcoming stuff\n", fg="blue"))
     inprogress = _get_list_items(list_id=ctx.obj[TODAY])
-    everything_else = _get_list_items(list_id=ctx.obj[TODO])
+    everything_else = _get_list_items(list_id=ctx.obj[LATER])
 
     _print_each_to_console(inprogress + everything_else)
 
@@ -155,7 +155,7 @@ def projects(ctx):
 
 
 main.add_command(today)
-main.add_command(week)
+main.add_command(later)
 main.add_command(done)
 main.add_command(books)
 main.add_command(goals)
