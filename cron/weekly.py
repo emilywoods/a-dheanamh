@@ -112,7 +112,7 @@ def get_labels(tasks: List) -> List:
 
 
 def _create_weekly_summary_report(distribution: Dict, tasks: List) -> None:
-    f = open(FILENAME, "a+")
+    f = open(FILENAME, "w")
 
     intro = f"""
 Date: {ctime(time())}
